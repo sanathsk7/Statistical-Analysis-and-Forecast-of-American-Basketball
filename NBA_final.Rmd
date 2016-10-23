@@ -1,0 +1,510 @@
+---
+title: "Statistical Analysis and Forecast <br> of American Basketball"
+author: "Sanath Shivaswamy & Arman Ghorbani"
+date: "June 6, 2016"
+output:
+  ioslides_presentation:
+    logo: nba-logo.jpg
+    smaller: yes
+    widescreen: yes
+  beamer_presentation: default
+  slidy_presentation: default
+---
+##Problem Statement
+
+- Predicting the NBA Playoff Bracket
+- Predicting the Next NBA Superstar from this Year's Top Draft Prospects
+- Analyze the Factors that Influence NBA Attendance
+
+<div style="margin-top:100px;">
+<img src="bracket.jpg" style="height:200px;width:300px;margin-left:10px;"></img>
+<img src="NBA-Draft-3.bmp" style="height:200px;width:200px;margin-left:50px;"></img>
+<img src="fans.jpg" style="height:200px;width:300px;margin-left:50px;"></img>
+</div>
+
+##Business Application to our Analysis
+
+- Gaining an edge in Sports Betting
+- Assisting NBA Scouts and Agents in Draft Picks Salary Negotiation
+- Valuable Insights for Individuals Seeking to Buy a Franchise & Season Ticket Holders
+
+##NBA Dictionary
+- MOV: Margin of Victory
+- ORTG: Offensive Ratings
+- DRTG: Defensive Ratings
+- EFG: Effective Field Goal Percentage
+- SOS: Strength of Schedule
+- SRS: Simple Rating System
+- WL: Win-lose percentage
+- TOV: Turnover
+- STL: Steals
+- PTS/G: Points Per Game
+- ORB: Offensive Rebound
+- DRB: Defensive Rebound
+- TRB: Total Rebound
+
+```{r nba,echo=FALSE,message=F,warning=F}
+library(class) #KNN
+library(data.table)
+library(MASS) #LDA
+library(e1071) #Naive Bayes
+library(XML) #readHTMLtable
+library(stringr)
+library(plotly)
+```
+
+##Predicting NBA Playoff Brackets
+```{r nba1, echo = FALSE}
+#Loading the data from 2009-10 to 2015-16 season
+S0 = read.csv("TS-1.csv",header=TRUE)
+S1 = read.csv("TS-2.csv",header=TRUE)
+S2 = read.csv("TS-3.csv",header=TRUE)
+TS = rbind2(S0,S1)
+#Factorising the playoff round variable
+#No Playoffs - 0, 1st Round - 1, Conf. Semis - 2, Conf.Finals - 3, Runner-Up - 4, Champion - 5
+TS$P = factor(TS$P)
+#Reducing the no of components - PCA
+result = princomp(TS[9:length(TS)])
+new = TS[9:12]
+#summary(result)
+#Components 1-7 explain 99% of variation in data
+dm = lda(P~W.L.+MOV+SOS+SRS,data = TS) 
+y_pred = predict(dm)$class
+#rint(y_pred)
+#print(table(TS$P,y_pred))
+```
+
+```{r}
+head(TS,4)
+head(new,4)
+```
+
+```{r echo=FALSE}
+TI1 = as.data.frame(S2[,c(8:11)]) 
+res = predict(dm,TI1)
+y_pred = res$class
+#cbind(as.character(S2$Tm),as.numeric(y_pred)-1)
+pos = res$posterior
+bracket_2016=cbind(as.character(S2$Tm),pos[,6]*100)
+```
+
+```{r echo=FALSE}
+temp = data.table(TS)
+tmp = temp[Season=="2014-15"]
+TI2 = tmp[,.(W.L.,MOV,SOS,SRS)] 
+res1 = predict(dm,TI2)
+y_pred = res1$class
+pos = res1$posterior
+bracket_2015=cbind(as.character(tmp$Tm),pos[,6]*100)
+```
+
+```{r echo=FALSE}
+temp = data.table(TS)
+tmp = temp[Season=="2013-14"]
+TI3 = tmp[,.(W.L.,MOV,SOS,SRS)] 
+res2 = predict(dm,TI3)
+y_pred = res2$class
+pos = res2$posterior
+bracket_2014=cbind(as.character(tmp$Tm),pos[,6]*100)
+```
+
+##2015-16 Bracket Results
+```{r}
+head(bracket_2016,20)
+```
+
+##2015-16 NBA Playoff Bracket
+<div>
+<img src="2016.png" style="height:500px;width:800px;margin-left:10px;"></img>
+<div>
+
+##2014-15 NBA Playoff Bracket
+<div>
+  <img src="2015.png" style="height:500px;width:800px;margin-left:10px;"></img>
+</div>
+##2013-14 NBA Playoff Bracket
+<div>
+<img src="2014.png" style="height:500px;width:800px;margin-left:10px;"></img>
+</div>
+
+##Predicting the Next NBA Superstar from this Year's Top Draft Prospects
+```{r echo=FALSE}
+#Forwards only
+forward = read.csv("Forward1.csv",header = TRUE)
+players = as.character(forward$Player)
+players = cbind(players,College = as.character(forward$College))
+data = NULL
+for(i in 1:length(players[,1])){  
+  url=NULL
+  tmp = NULL
+  if(players[i,2]==""){
+    url = paste("http://www.basketball-reference.com/euro/players/",players[i],"-1.html",sep = "")
+    
+  }
+  else{  
+    if(players[i]=="thomas-robinson"){ 
+      url = "http://www.sports-reference.com/cbb/players/thomas-robinson-2.html" 
+    }
+    else{
+      url = paste("http://www.sports-reference.com/cbb/players/",players[i],"-1.html",sep = "") 
+    }
+    tmp = readHTMLTable(url,header = TRUE)
+    tmp = tmp$players_per_game
+    tmp = cbind(players[i],tmp)
+    if(length(tmp$Season)>1){
+      tmp = tmp[length(tmp$Season),]
+    }
+    data = rbind(data,tmp)
+  }
+}
+newforward = read.csv("NF.csv",header = TRUE)
+data1 = data[c(1,19:22,length(data))]
+data1$TRB = as.numeric(as.character(data1$TRB))
+data1$AST = as.numeric(as.character(data1$AST))
+data1$STL = as.numeric(as.character(data1$STL))
+data1$BLK = as.numeric(as.character(data1$BLK))
+data1$PTS = as.numeric(as.character(data1$PTS))
+ndata1 = newforward[c(1,5:8,4)]
+names(data1) = c("Player","TRB","AST","STL","BLK","PTS")
+cdata1 = rbind(data1,ndata1)
+cdata1 = cdata1[complete.cases(cdata1),]
+#K-MEANS
+fit = kmeans(cdata1[,2:length(cdata1)],8,8,20)
+#print(fit$size)
+y = fit$cluster
+y1 = as.data.table(cbind(as.character(cdata1$Player),y))
+#y1[order(y,decreasing = FALSE)]
+names(y1) = c("Players","Cluster")
+#plot_ly(data = y1, x = Cluster, y = Players, mode = "markers",color = Cluster)
+#KNN
+P = c(1,0,1,1,1,1,1,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+#1->Superstar, 0->Regular Player
+data1 = data1[complete.cases(data1),]
+data1 = cbind(data1,P)
+x_train = data1[,c(2:6)]
+x_test = ndata1[,c(2:length(ndata1))]
+y_train = data1[,7]
+res = knn(x_train, x_test, y_train, k = 4, prob = FALSE, use.all = TRUE)
+c_ftrain = cbind(ndata1,res)
+#res
+```
+
+```{r}
+head(data1,5)
+head(ndata1)
+```
+
+##Forward
+```{r, echo=FALSE}
+plot_ly(data = y1, x = Cluster, y = Players, mode = "markers",color = Cluster)
+m = list(
+  l = 200,
+  r = 50,
+  b = 100,
+  t = 100,
+  pad = 4
+)
+layout(
+    autosize=F,
+    height = 800,
+    width = 1200,
+    margin=m
+)
+```
+
+```{r}
+#Guards Only
+guard = read.csv("Guard.csv",header = TRUE)
+players = as.character(guard$Player)
+players = cbind(players,College = as.character(guard$College))
+gdata = NULL
+for(i in 1:length(players[,1])){  
+  url=NULL
+  tmp = NULL
+  if(players[i,2]==""){
+    url = paste("http://www.basketball-reference.com/euro/players/",players[i],"-1.html",sep = "")
+  }
+  else{  
+    if(players[i]=="thomas-robinson"){ 
+      url = "http://www.sports-reference.com/cbb/players/thomas-robinson-2.html" 
+    }
+    else{
+      url = paste("http://www.sports-reference.com/cbb/players/",players[i],"-1.html",sep = "") 
+    }
+    tmp = readHTMLTable(url,header = TRUE)
+    tmp = tmp$players_per_game
+    tmp = cbind(players[i],tmp)
+    if(length(tmp$Season)>1){
+      tmp = tmp[length(tmp$Season),]
+    }
+    gdata = rbind(gdata,tmp)
+  }
+}
+newguard = read.csv("NG.csv",header = TRUE)
+gdata1 = gdata[c(1,19:22,length(gdata))]
+gdata1$TRB = as.numeric(as.character(gdata1$TRB))
+gdata1$AST = as.numeric(as.character(gdata1$AST))
+gdata1$STL = as.numeric(as.character(gdata1$STL))
+gdata1$BLK = as.numeric(as.character(gdata1$BLK))
+gdata1$PTS = as.numeric(as.character(gdata1$PTS))
+ngdata1 = newguard[c(1,3:6,2)]
+names(gdata1) = c("Player","TRB","AST","STL","BLK","PTS")
+cdata2 = rbind(gdata1,ngdata1)
+cdata2 = cdata2[complete.cases(cdata2),]
+#K-MEANS
+fit = kmeans(cdata2[,2:length(cdata2)],8,8,20)
+#print(fit$size)
+y = fit$cluster
+y1 = as.data.table(cbind(as.character(cdata2$Player),y))
+names(y1) = c("Players","Cluster")
+#y1[order(y,decreasing = FALSE)]
+#KNN
+gdata2 = gdata1[complete.cases(gdata1),]
+P=c(1,1,1,1,1,1,1,1,0,0,1,0,0,1,1,0,1,0,0,0,0,0,0,0,0,0,0,1,1,1,0,1,0,0,0,0,0,0,0)
+gdata2 = cbind(gdata2,P)
+x_train = gdata2[,c(2:6)]
+x_test = ngdata1[,c(2:length(ngdata1))]
+y_train = gdata2[,7]
+res = knn(x_train, x_test, y_train, k = 6, prob = FALSE, use.all = TRUE)
+#res
+c_gtrain = cbind(ngdata1,res)
+#some of the Guards have super-star potential
+```
+
+##Guard data
+```{r}
+head(gdata2,5)
+head(ngdata1)
+```
+##Guard
+```{r echo=FALSE}
+plot_ly(data = y1, x = Cluster, y = Players, mode = "markers",color = Cluster)
+m = list(
+  l = 150,
+  r = 0,
+  b = 100,
+  t = 100,
+  pad = 4
+)
+layout(
+    autosize=F,
+    height = 800,
+    width = 1200,
+    margin=m
+)
+```
+
+##Next Superstar
+```{r}
+head(c_ftrain)
+head(c_gtrain)
+```
+
+
+##Analyze the Factors that Influence NBA Attendance
+```{r echo=FALSE}
+#Avg Attendance for each season
+year = c(2000:2016)
+misc = data.frame()
+team = data.frame()
+opp = data.frame()
+for(i in year){ 
+  url=NULL
+  season = NULL
+  tmp = NULL
+  url = paste("http://www.basketball-reference.com/leagues/NBA_",i,".html",sep="")
+  tmp = readHTMLTable(url,header = TRUE,as.data.frame = TRUE)
+  if(length(tmp$misc$Rk) == 30){
+    Season = rep(i,30)
+  }
+  else{
+    Season = rep(i,31)
+  }
+  tmp$misc= cbind(Season,tmp$misc)
+  tmp$team = cbind(Season,tmp$team)
+  tmp$opponent = cbind(Season,tmp$opponent)
+  misc = rbind(misc,tmp$misc)
+  team = rbind(team,tmp$team)
+  opp = rbind(opp,tmp$opponent)
+}
+  misc$Attendance = str_replace(misc$Attendance,",","")
+  misc$Attendance = as.numeric(misc$Attendance)
+  misc = data.table(misc)
+  team = data.table(team)
+  opp = data.table(opp)
+  abbr = read.table("Team_abbreviation.txt",sep=",")
+```
+
+```{r}
+head(misc,4)
+```
+
+
+##League Avg. NBA Attendance per season
+```{r echo=FALSE}
+#Per Season
+att_lg = misc[Team == "League Average",.(Season,Team,Attendance)]
+#plot(att_lg$Season,att_lg$Attendance)
+plot_ly(d=att_lg,x=Season,y=Attendance,text=paste("Team",Team),mode="markers")
+m = list(
+  l = 50,
+  r = 50,
+  b = 100,
+  t = 100,
+  pad = 4
+)
+layout(
+    xaxis = list(title = "Season"),
+    yaxis = list(title = "Avg. Attendance"),
+    autosize=F,
+    height = 800,
+    width = 1200,
+    margin=m
+)
+```
+
+##Total Attendance per NBA Team since 2000
+```{r echo=FALSE}
+#Per Team (loyal fans)
+misc$Team = gsub("[*].*$","",misc$Team)
+att_tmsm = misc[,.(Total=sum(Attendance)),Team]
+att_tmsm = att_tmsm[order(Team)]
+att_tmsm$Team = gsub("[*].*$","",att_tmsm$Team)
+#plot(att_tmsm$Team,att_tmsm$Total,type="l")
+plot_ly(d=att_tmsm,x=Team,y=Total,text=paste("Team",Team),mode="markers",size = Total)
+m = list(
+  l = 100,
+  r = 50,
+  b = 100,
+  t = 100,
+  pad = 4
+)
+layout(
+    yaxis = list(title = "Total Attendance"),
+    autosize=F,
+    height = 550,
+    width = 1000,
+    margin=m
+)
+```
+
+##Franchise Wins and Total Attendance
+```{r echo=FALSE}
+#relation between wins and attendance for 2016 season
+att_w = misc[Season =="2016",.(Team,Attendance)]
+att_w$Team = gsub("[*].*$","",att_w$Team)
+att_w = att_w[order(as.character(Team))]
+abbr = read.table("Team_abbreviation.txt",sep=",")
+League_avg = att_w[Team == "League Average"]
+att_w = att_w[Team!="League Average"]
+index = match(att_w$Team,abbr[,2])
+att_w$Team = abbr[index,1]
+att_w = cbind(att_w,Conference = abbr[index,3])
+TO=as.data.table(S2)
+wins = TO[Season=="2015-16",.(Tm,W)]
+wins$Tm = gsub("[*].*$","",wins$Tm)
+wins$Tm = gsub("CHO","CHA",wins$Tm)
+att_w$Team = gsub("NOH","NOP",att_w$Team)
+index = match(att_w$Team,wins$Tm)
+att_w = cbind(att_w,Wins=wins$W[index])
+att_w$Wins = as.numeric(att_w$Wins)
+w_cor=cor(att_w$Attendance,att_w$Wins)
+plot_ly(d=att_w,x=Wins,y=Attendance,text=paste("Team",Team),mode="markers",color=Wins,size = Wins)
+m = list(
+  l = 100,
+  r = 50,
+  b = 100,
+  t = 140,
+  pad = 4
+)
+layout(
+    xaxis = list(title = "Wins"),
+    yaxis = list(title = "Attendance"),
+    height = 800,
+    width = 1000,
+    margin=m
+)
+```
+
+##Relation between Team Offense and Attendance
+```{r echo=FALSE}
+#relation between team scoring and attendance
+misc$Team = gsub("[*].*$","",misc$Team)
+misc = misc[order(Team)]
+team$Team = gsub("[*].*$","",team$Team)
+team = team[order(Team)]
+team_avg = team[Team=="League Average",.(Season,Team,`PTS/G`)]
+misc_avg = misc[Team=="League Average",.(Season,Team,Attendance)]
+team_s = team[Team!="League Average",.(Team,`PTS/G`),Season] 
+index = match(team_s$Season,team_avg$Season)
+team_s = cbind(team_s,team_avg[index])
+names(team_s)=c("Season","Team","PTS/G","LSeason","LTeam","LPTS/G")
+team_s$tdiff = as.numeric(as.character(team_s$`PTS/G`)) - as.numeric(as.character(team_s$`LPTS/G`))
+team_s = team_s[order(Team)]
+team_a = misc[Team!="League Average"]
+team_a = team_a[order(Team)]
+tmp = team_s[,.(Season,Team,`PTS/G`,`LPTS/G`,tdiff)]
+tmp = cbind(tmp,team_a[,.(Attendance = Attendance)])
+#color-Season,Team
+plot_ly(d=tmp,x=tdiff,y=Attendance,text=paste("Team",Team),mode="markers",color=Season,size=Season)
+m = list(
+  l = 100,
+  r = 50,
+  b = 100,
+  t = 140,
+  pad = 4
+)
+layout(
+    xaxis = list(title = "Average Team Scoring Differential"),
+    yaxis = list(title = "Attendance"),
+    margin = m
+)
+cor(tmp$tdiff,tmp$Attendance)
+```
+
+##Relation between Team Defense and Attendance
+```{r echo=FALSE, message=F, warning=F}
+#relation between opponent scoring and attendance
+opp$Team = gsub("[*].*$","",opp$Team)
+opp = opp[order(Team)]
+opp_avg = opp[Team=="League Average",.(Season,Team,`PTS/G`)]
+misc_avg = misc[Team=="League Average",.(Season,Team,Attendance)]
+opp_s = opp[Team!="League Average",.(Team,`PTS/G`),Season] 
+index = match(opp_s$Season,opp_avg$Season)
+opp_s = cbind(opp_s,opp_avg[index])
+names(opp_s)=c("Season","Team","PTS/G","LSeason","LTeam","LPTS/G")
+opp_s$odiff = as.numeric(as.character(opp_s$`PTS/G`)) - as.numeric(as.character(opp_s$`LPTS/G`))
+opp_s = opp_s[order(Team)]
+opp_a = misc[Team!="League Average"]
+opp_a$Team = gsub("[*].*$","",opp_a$Team)
+opp_a = opp_a[order(Team)]
+tmp = opp_s[,.(Season,Team,`PTS/G`,`LPTS/G`,odiff)]
+tmp = cbind(tmp,opp_a[,.(Attendance = Attendance)])
+#color-Season,Team
+plot_ly(d=tmp,x=odiff,y=Attendance,text=paste("Team",Team),mode="markers",color=Team,size=Season)
+m = list(
+  l = 100,
+  r = 50,
+  b = 100,
+  t = 120,
+  pad = 4
+)
+layout(
+    xaxis = list(title = "Average Opponent Scoring Differential"),
+    yaxis = list(title = "Attendance"),
+    margin = m
+)
+cor(tmp$odiff,tmp$Attendance)
+```
+
+##R packages used
+- class
+- data.table
+- MASS
+- e1071
+- XML
+- stringr
+- plotly
+
+
+
